@@ -17,6 +17,11 @@ inline const char* get_result_status_name(ExecStatusType status) noexcept {
         OZO_CASE_RETURN(PGRES_BAD_RESPONSE)
         OZO_CASE_RETURN(PGRES_EMPTY_QUERY)
         OZO_CASE_RETURN(PGRES_FATAL_ERROR)
+#ifdef LIBPQ_HAS_PIPELINING
+        OZO_CASE_RETURN(PGRES_PIPELINE_SYNC)
+        OZO_CASE_RETURN(PGRES_PIPELINE_ABORTED)
+        OZO_CASE_RETURN(PGRES_TUPLES_CHUNK)
+#endif
     }
 #undef OZO_CASE_RETURN
     return "unknown";

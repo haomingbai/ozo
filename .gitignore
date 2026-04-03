@@ -1,1 +1,4 @@
 build
+
+# Ignore clangd cache
+.cache/

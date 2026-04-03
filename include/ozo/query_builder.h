@@ -183,9 +183,34 @@ struct get_query_params_impl<query_builder<Ts...>> {
 
 namespace literals {
 
-template <class CharT, CharT ... c>
-constexpr auto operator "" _SQL() {
-    return make_query_builder(hana::make_tuple(make_query_text(hana::string<c ...>())));
+template <std::size_t N>
+struct fixed_string {
+    char value[N];
+
+    constexpr fixed_string(const char (&str)[N]) {
+        for (std::size_t i = 0; i < N; ++i) {
+            value[i] = str[i];
+        }
+    }
+
+    static constexpr std::size_t size = N - 1; // 不算 '\0'
+};
+
+template <fixed_string Str>
+constexpr auto make_hana_string_from_fixed() {
+    return []<std::size_t... I>(std::index_sequence<I...>) {
+        return hana::string_c<Str.value[I]...>;
+    }(std::make_index_sequence<Str.size>{});
+}
+
+template <fixed_string Str>
+constexpr auto operator ""_SQL() {
+    constexpr auto sql = make_hana_string_from_fixed<Str>();
+    return make_query_builder(
+        hana::make_tuple(
+            make_query_text(sql)
+        )
+    );
 }
 
 } // namespace literals

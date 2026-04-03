@@ -240,6 +240,15 @@ struct async_get_result_op : boost::asio::coroutine {
             case PGRES_COPY_BOTH:
             case PGRES_NONFATAL_ERROR:
                 break;
+
+#ifdef LIBPQ_HAS_PIPELINING
+            // Since currently there have not seen that ozo has supported pipeline
+            // inteoduced in PostgreSQL 14, the related results should be ignored.
+            case PGRES_PIPELINE_SYNC:
+            case PGRES_PIPELINE_ABORTED:
+            case PGRES_TUPLES_CHUNK:
+                break;
+#endif
         }
 
         get_connection(ctx_).set_error_context(get_result_status_name(status));
