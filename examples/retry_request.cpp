@@ -3,7 +3,7 @@
 #include <ozo/shortcuts.h>
 #include <ozo/failover/retry.h>
 
-#include <boost/asio/io_service.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/asio/spawn.hpp>
 
 #include <iostream>

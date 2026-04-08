@@ -57,8 +57,7 @@ class OzoConan(ConanFile):
                                                      ]
         self.cpp_info.components["_ozo"].defines = [
             "BOOST_COROUTINES_NO_DEPRECATION_WARNING",
-            "BOOST_HANA_CONFIG_ENABLE_STRING_UDL",
-            "BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT"
+            "BOOST_HANA_CONFIG_ENABLE_STRING_UDL"
         ]
 
         compiler = self.settings.compiler

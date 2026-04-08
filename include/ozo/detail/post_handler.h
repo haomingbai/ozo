@@ -17,7 +17,13 @@ struct post_handler {
     template <typename Connection>
     void operator() (error_code ec, Connection&& connection) {
         auto ex = get_executor(connection);
-        asio::post(ex, detail::bind(std::move(handler), std::move(ec), std::forward<Connection>(connection)));
+        auto bound = detail::bind(std::move(handler), std::move(ec), std::forward<Connection>(connection));
+        auto bound_ex = detail::resolve_asio_executor(asio::get_associated_executor(bound));
+        asio::post(ex, [bound_ex, bound = std::move(bound)]() mutable {
+            asio::dispatch(bound_ex, [bound = std::move(bound)]() mutable {
+                bound();
+            });
+        });
     }
 };
 

@@ -252,6 +252,7 @@ struct pooled_connection_wrapper : Test {
 
     auto wrap_pooled_connection_handler() {
         return ozo::detail::wrap_pooled_connection_handler(
+            io,
             io.get_executor(),
             connection_source{&provider_mock},
             ozo::none,
@@ -269,6 +270,7 @@ using ozo::error_code;
 
 TEST_F(pooled_connection_wrapper, should_be_copyable_with_non_copyable_handler_for_resource_pool_compatibility) {
     auto h = ozo::detail::wrap_pooled_connection_handler(
+            io,
             io.get_executor(),
             connection_source{&provider_mock},
             ozo::none,

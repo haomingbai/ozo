@@ -11,7 +11,7 @@ services:
     - ~/.ccache:/ccache
     - .:/code
   ozo_postgres:
-    image: postgres:alpine
+    image: postgres:16
     environment:
        POSTGRES_DB: &POSTGRES_DB ozo_test_db
        POSTGRES_USER: &POSTGRES_USER ozo_test_user

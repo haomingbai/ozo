@@ -40,7 +40,7 @@ struct fixture {
 
     fixture() {
         EXPECT_CALL(io.strand_service_, get_executor()).WillOnce(ReturnRef(strand));
-        auto ex = boost::asio::executor(ozo::detail::make_strand_executor(io.get_executor()));
+        auto ex = ozo::detail::make_strand_executor(io.get_executor());
         EXPECT_CALL(callback, get_executor()).WillRepeatedly(Return(ex));
     }
 };

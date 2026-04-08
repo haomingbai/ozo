@@ -14,12 +14,14 @@ auto create_pooled_connection(const Allocator& alloc, const Executor& ex, Rep&& 
     return std::allocate_shared<pooled_connection<std::decay_t<Rep>, Executor>>(alloc, ex, std::forward<Rep>(rep));
 }
 
-template <typename Source, typename Handler, typename TimeConstraint>
+template <typename Source, typename Handler, typename TimeConstraint, typename IoContext>
 struct pooled_connection_wrapper {
     using connection_ptr = typename connection_pool<Source>::connection_type;
     using connection = typename connection_ptr::element_type;
     using handle_type = typename connection::rep_type;
+    using io_context_type = std::decay_t<IoContext>;
 
+    io_context_type* io_ = nullptr;
     typename connection::executor_type io_executor_;
     Source source_;
     detail::make_copyable_t<Handler> handler_;
@@ -70,7 +72,7 @@ struct pooled_connection_wrapper {
             return handler_(std::move(ec), std::move(conn));
         }
 
-        source_(io_executor_.context(), time_constrain_, wrapper{std::move(handler_), std::move(handle)});
+        source_(*io_, time_constrain_, wrapper{std::move(handler_), std::move(handle)});
     }
 
     using executor_type = decltype(asio::get_associated_executor(handler_));
@@ -86,12 +88,12 @@ struct pooled_connection_wrapper {
     }
 };
 
-template <typename Source, typename Executor, typename TimeConstraint, typename Handler>
-auto wrap_pooled_connection_handler(const Executor& ex, Source&& source, TimeConstraint t, Handler&& handler) {
+template <typename IoContext, typename Source, typename Executor, typename TimeConstraint, typename Handler>
+auto wrap_pooled_connection_handler(IoContext& io, const Executor& ex, Source&& source, TimeConstraint t, Handler&& handler) {
     static_assert(ConnectionSource<Source>, "is not a ConnectionSource");
 
-    return pooled_connection_wrapper<std::decay_t<Source>, std::decay_t<Handler>, TimeConstraint> {
-        ex, std::forward<Source>(source), std::forward<Handler>(handler), t
+    return pooled_connection_wrapper<std::decay_t<Source>, std::decay_t<Handler>, TimeConstraint, std::decay_t<IoContext>> {
+        std::addressof(io), ex, std::forward<Source>(source), std::forward<Handler>(handler), t
     };
 }
 
@@ -114,6 +116,7 @@ void connection_pool<Source, ThreadSafety>::operator ()(io_context& io, TimeCons
     impl_.get_auto_recycle(
         io,
         detail::wrap_pooled_connection_handler(
+            io,
             io.get_executor(),
             source_,
             t,
@@ -125,7 +128,7 @@ void connection_pool<Source, ThreadSafety>::operator ()(io_context& io, TimeCons
 
 template <typename Rep, typename Executor>
 pooled_connection<Rep, Executor>::pooled_connection(const Executor& ex, Rep&& rep)
-: rep_(std::move(rep)), ex_(ex), stream_(get_executor().context()) {
+: rep_(std::move(rep)), ex_(ex), stream_(detail::get_connection_stream(ex_)) {
     if (auto fd = PQsocket(native_handle()); fd != -1) {
         stream_.assign(fd);
     }

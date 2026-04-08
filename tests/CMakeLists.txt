@@ -4,7 +4,7 @@ include(ExternalProject)
 ExternalProject_Add(
     GoogleTest
     GIT_REPOSITORY "https://github.com/google/googletest.git"
-    GIT_TAG release-1.10.0
+    GIT_TAG release-1.12.1
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}
     UPDATE_COMMAND ""
     LOG_DOWNLOAD ON
@@ -15,6 +15,7 @@ ExternalProject_Get_Property(GoogleTest source_dir)
 include_directories(SYSTEM "${source_dir}/include")
 include_directories(SYSTEM "${CMAKE_CURRENT_BINARY_DIR}/include")
 link_directories("${CMAKE_CURRENT_BINARY_DIR}/lib")
+link_directories("${CMAKE_CURRENT_BINARY_DIR}/lib64")
 
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}")
 

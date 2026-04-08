@@ -1,11 +1,11 @@
 # ozo
 
-[![Build Status](https://travis-ci.org/yandex/ozo.svg?branch=master)](https://travis-ci.org/yandex/ozo)
+[![CI](https://github.com/haomingbai/ozo/actions/workflows/ci.yml/badge.svg)](https://github.com/haomingbai/ozo/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/yandex/ozo/branch/master/graph/badge.svg)](https://codecov.io/gh/yandex/ozo)
 
 ## What's this
 
-OZO is a C++17 library for asyncronous communication with PostgreSQL DBMS.
+OZO is a C++20 library for asyncronous communication with PostgreSQL DBMS.
 The library leverages the power of template metaprogramming, providing convenient mapping from C++ types to SQL along with rich query building possibilities. OZO supports different concurrency paradigms (callbacks, futures, coroutines), using Boost.Asio under the hood. Low-level communication with PostgreSQL server is done via libpq. All concepts in the library are designed to be easily extendable (even replaceable) by the user to simplify adaptation to specific project requirements.
 
 ### API
@@ -19,20 +19,22 @@ Since the project is on early state of development it lacks of documentation. We
 
 ## Compatibilities
 
-For the time OZO is not compatible with new executors models that are used by default since Boost 1.74. The `BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT` macro needs to be defined. See Boost 1.74 [changelog](https://www.boost.org/doc/libs/1_74_0/doc/html/boost_asio/history.html#boost_asio.history.asio_1_18_0___boost_1_74) for the details.
+OZO now targets the default executor model used by modern Boost.Asio releases.
+`BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT` is no longer required and is no longer
+exported to consumers.
 ## Dependencies
 
 These things are needed:
 
 * **CMake** is used as build system
 * **GCC** or **Clang** C++ compiler with C++17 support (tested with GCC 7.0, Clang 5.0 and Apple LLVM version 9.0.0)
-* **Boost** >= 1.66 with `BOOST_HANA_CONFIG_ENABLE_STRING_UDL` defined.
+* **Boost** >= 1.74 with `BOOST_HANA_CONFIG_ENABLE_STRING_UDL` defined.
 * **libpq** >= 9.3
-* Ozo uses the [resource_pool](https://github.com/elsid/resource_pool) library as a git submodule, so in case of using a package version, this dependency should be satisfied too.
+* OZO vendors the [resource_pool](https://github.com/elsid/resource_pool) sources directly under `contrib/resource_pool`.
 
-If you want to run integration tests and/or build inside Docker container:
-* **Docker** >= 1.13.0
-* **Docker Compose** >= 1.10.0
+If you want to run PostgreSQL integration tests locally:
+* **Podman**
+* a local copy of `docker.io/library/postgres:16` or another PostgreSQL image
 
 ## Build
 
@@ -118,24 +120,39 @@ scripts/build.sh docker docs
 
 ### Test against a local postgres
 
-You can use `scripts/build.sh` but add `pg` first:
+The recommended path is the Podman helper script:
 
 ```bash
-scripts/build.sh pg <compiler> <target>
+scripts/run_pg_tests_podman.sh
 ```
 
-or if you want build code in docker:
+The script starts a local PostgreSQL container from `docker.io/library/postgres:16`
+by default, builds `ozo_tests` with `OZO_BUILD_PG_TESTS=ON`, runs the full test
+suite, and removes the container afterwards.
+
+You can override the image, port, build directory, and PostgreSQL credentials
+with environment variables:
 
 ```bash
-scripts/build.sh pg docker <compiler> <target>
+export OZO_PODMAN_POSTGRES_IMAGE=docker.io/library/postgres:16
+export OZO_PG_TEST_PORT=55432
+export OZO_PG_BUILD_DIR=build-podman-pg
+
+scripts/run_pg_tests_podman.sh
 ```
 
-This will attempt to launch postgres:alpine from your Docker registry.
-Or you can point ozo tests to a postgres of your choosing by setting these environment variables prior to building:
+Or you can point OZO tests to a PostgreSQL instance of your choosing by setting
+these environment variables prior to building:
 
 ```bash
 export OZO_BUILD_PG_TESTS=ON
 export OZO_PG_TEST_CONNINFO='your conninfo (connection string)'
 
-scripts/build.sh gcc debug
+cmake -S . -B build-pg -DOZO_BUILD_TESTS=ON -DOZO_BUILD_PG_TESTS=ON -DOZO_PG_TEST_CONNINFO="$OZO_PG_TEST_CONNINFO"
+cmake --build build-pg -j$(nproc)
+ctest --test-dir build-pg -V
 ```
+
+The older `docker-compose` based scripts remain in the repository for historical
+development workflows, but the maintained path for local PostgreSQL testing is
+the Podman flow above.

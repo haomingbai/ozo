@@ -3,7 +3,7 @@
 #include <ozo/execute.h>
 #include <ozo/shortcuts.h>
 
-#include <boost/asio/spawn.hpp>
+#include <future>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -25,30 +25,36 @@ TEST(cancel, should_cancel_operation) {
     using namespace hana::literals;
 
     ozo::io_context io;
-    boost::asio::steady_timer timer(io);
+    auto timer = ozo::detail::get_operation_timer(io.get_executor());
+    auto result = std::make_shared<std::promise<ozo::error_code>>();
+    auto future = result->get_future();
+    const ozo::connection_info conn_info(OZO_PG_TEST_CONNINFO);
 
-    boost::asio::spawn(io, [&io, &timer](auto yield){
-        const ozo::connection_info conn_info(OZO_PG_TEST_CONNINFO);
-        ozo::error_code ec;
-        auto conn = ozo::get_connection(conn_info[io], yield[ec]);
-        EXPECT_FALSE(ec);
-        boost::asio::spawn(yield, [&io, &timer, handle = get_cancel_handle(conn)](auto yield) mutable {
-            timer.expires_after(1s);
-            ozo::error_code ec;
-            timer.async_wait(yield[ec]);
+    ozo::get_connection(conn_info[io], [&io, &timer, result](ozo::error_code ec, auto conn) mutable {
+        if (ec) {
+            result->set_value(ec);
+            return;
+        }
+
+        timer.expires_after(1s);
+        timer.async_wait([&io, handle = get_cancel_handle(conn)](ozo::error_code ec) mutable {
             if (!ec) {
                 // Guard is needed since cancel will be served with external
                 // system executor, so we need to preserve our io_context from
                 // stop until all the operation processed properly
                 auto guard = boost::asio::make_work_guard(io);
-                ozo::cancel(std::move(handle), io, 5s, yield[ec]);
+                ozo::cancel(std::move(handle), io, 5s,
+                    [guard = std::move(guard)](ozo::error_code, std::string) mutable {});
             }
         });
-        ozo::execute(conn, "SELECT pg_sleep(1000000)"_SQL, yield[ec]);
-        EXPECT_EQ(ec, ozo::sqlstate::query_canceled);
+        ozo::execute(conn, "SELECT pg_sleep(1000000)"_SQL,
+            [result](ozo::error_code ec, auto) mutable {
+                result->set_value(ec);
+            });
     });
 
     io.run();
+    EXPECT_EQ(future.get(), ozo::sqlstate::query_canceled);
 }
 
 TEST(cancel, should_stop_cancel_operation_on_zero_timeout) {
@@ -58,31 +64,45 @@ TEST(cancel, should_stop_cancel_operation_on_zero_timeout) {
 
     ozo::io_context io;
     ozo::io_context dummy_io;
-    boost::asio::steady_timer timer(io);
+    auto timer = ozo::detail::get_operation_timer(io.get_executor());
+    const ozo::connection_info conn_info(OZO_PG_TEST_CONNINFO);
+    auto execute_result = std::make_shared<std::promise<ozo::error_code>>();
+    auto execute_future = execute_result->get_future();
+    auto cancel_result = std::make_shared<std::promise<ozo::error_code>>();
+    auto cancel_future = cancel_result->get_future();
 
-    boost::asio::spawn(io, [&io, &timer, &dummy_io](auto yield){
-        const ozo::connection_info conn_info(OZO_PG_TEST_CONNINFO);
-        ozo::error_code ec;
-        auto conn = ozo::get_connection(conn_info[io], yield[ec]);
-        EXPECT_FALSE(ec);
-        boost::asio::spawn(yield, [&io, &timer, handle = get_cancel_handle(conn, dummy_io.get_executor())](auto yield) mutable {
-            timer.expires_after(1s);
-            ozo::error_code ec;
-            timer.async_wait(yield[ec]);
-            if (!ec) {
-                // Guard is needed since cancel will be served with external
-                // system executor, so we need to preserve our io_context from
-                // stop until all the operation processed properly
-                auto guard = boost::asio::make_work_guard(io);
-                ozo::cancel(std::move(handle), io, 0s, yield[ec]);
-                EXPECT_EQ(ec, boost::asio::error::timed_out);
+    ozo::get_connection(conn_info[io], [&io, &timer, &dummy_io, execute_result, cancel_result]
+            (ozo::error_code ec, auto conn) mutable {
+        if (ec) {
+            execute_result->set_value(ec);
+            cancel_result->set_value(ec);
+            return;
+        }
+
+        timer.expires_after(1s);
+        timer.async_wait([&io, cancel_result, handle = get_cancel_handle(conn, dummy_io.get_executor())](ozo::error_code ec) mutable {
+            if (ec) {
+                cancel_result->set_value(ec);
+                return;
             }
+            // Guard is needed since cancel will be served with external
+            // system executor, so we need to preserve our io_context from
+            // stop until all the operation processed properly
+            auto guard = boost::asio::make_work_guard(io);
+            ozo::cancel(std::move(handle), io, 0s,
+                [cancel_result, guard = std::move(guard)](ozo::error_code ec, std::string) mutable {
+                    cancel_result->set_value(ec);
+                });
         });
-        ozo::execute(conn, "SELECT pg_sleep(1000000)"_SQL, 2s, yield[ec]);
-        EXPECT_EQ(ec, boost::asio::error::timed_out);
+        ozo::execute(conn, "SELECT pg_sleep(1000000)"_SQL, 2s,
+            [execute_result](ozo::error_code ec, auto) mutable {
+                execute_result->set_value(ec);
+            });
     });
 
     io.run();
+    EXPECT_EQ(execute_future.get(), boost::asio::error::timed_out);
+    EXPECT_EQ(cancel_future.get(), boost::asio::error::timed_out);
 }
 
 } // namespace

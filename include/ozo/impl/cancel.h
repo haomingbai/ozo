@@ -124,7 +124,11 @@ struct cancel_op {
 
     void operator () () {
         auto [ec, msg] = dispatch_cancel(std::move(cancel_handle_));
-        asio::dispatch(detail::bind(std::move(handler_), std::move(ec), std::move(msg)));
+        auto bound = detail::bind(std::move(handler_), std::move(ec), std::move(msg));
+        auto bound_ex = detail::resolve_asio_executor(asio::get_associated_executor(bound));
+        asio::dispatch(bound_ex, [bound = std::move(bound)]() mutable {
+            bound();
+        });
     }
 };
 

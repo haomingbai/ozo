@@ -3,6 +3,7 @@
 #include <ozo/impl/result.h>
 #include <boost/iterator/iterator_facade.hpp>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 
@@ -390,7 +391,11 @@ public:
      * @return native_handle_type --- native handle representation
      */
     native_handle_type native_handle() const noexcept {
-        return std::addressof(*handle_);
+        if constexpr (std::is_pointer_v<handle_type>) {
+            return handle_;
+        } else {
+            return handle_.get();
+        }
     }
 
     /**

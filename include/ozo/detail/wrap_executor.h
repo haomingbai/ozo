@@ -21,7 +21,11 @@ struct wrap_executor {
 
     template <typename ...Args>
     void operator() (Args&& ...args) {
-        asio::dispatch(detail::bind(std::move(handler), std::forward<Args>(args)...));
+        auto bound = detail::bind(std::move(handler), std::forward<Args>(args)...);
+        auto bound_ex = detail::resolve_asio_executor(asio::get_associated_executor(bound));
+        asio::dispatch(bound_ex, [bound = std::move(bound)]() mutable {
+            bound();
+        });
     }
 
     using executor_type = Executor;

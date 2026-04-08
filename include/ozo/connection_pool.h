@@ -105,8 +105,8 @@ private:
  * the pool and be closed. The class object is non-copyable.
  *
  * @tparam Rep      --- underlying connection pool representation for the real connection.
- * @tparam Executor --- the type of the executor is used to perform IO; currently only
- *                      `boost::asio::io_context::executor_type` is supported.
+ * @tparam Executor --- the type of the executor used to perform IO. The default model uses
+ *                      `boost::asio::io_context::executor_type`.
  *
  * @thread_safety{Safe,Unsafe}
  * @ingroup group-connection-types

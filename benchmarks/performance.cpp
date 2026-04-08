@@ -8,7 +8,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include <boost/asio/io_service.hpp>
+#include <boost/asio/io_context.hpp>
 #include <boost/asio/spawn.hpp>
 #include <boost/program_options.hpp>
 

@@ -6,7 +6,6 @@
 #include <ozo/asio.h>
 
 #include <boost/asio/post.hpp>
-#include <boost/asio/executor.hpp>
 #include <boost/asio/bind_executor.hpp>
 
 #include <gmock/gmock.h>
@@ -201,7 +200,7 @@ struct stream_descriptor {
 
     void assign(int fd) { mock_->assign(fd);}
 
-    using executor_type = boost::asio::executor;
+    using executor_type = ozo::tests::executor;
 
     executor_type get_executor() const {
         return io_->get_executor();
@@ -251,7 +250,7 @@ struct callback_gmock;
 
 template <typename Arg1, typename Arg2>
 struct callback_gmock<Arg1, Arg2> {
-    using executor_type = boost::asio::executor;
+    using executor_type = ozo::tests::executor;
 
     MOCK_CONST_METHOD3_T(call, void(ozo::error_code, Arg1, Arg2));
     MOCK_CONST_METHOD0_T(get_executor, executor_type ());
@@ -259,7 +258,7 @@ struct callback_gmock<Arg1, Arg2> {
 
 template <typename Arg>
 struct callback_gmock<Arg> {
-    using executor_type = boost::asio::executor;
+    using executor_type = ozo::tests::executor;
 
     MOCK_CONST_METHOD2_T(call, void(ozo::error_code, Arg));
     MOCK_CONST_METHOD0_T(get_executor, executor_type ());
@@ -267,7 +266,7 @@ struct callback_gmock<Arg> {
 
 template <>
 struct callback_gmock<> {
-    using executor_type = boost::asio::executor;
+    using executor_type = ozo::tests::executor;
 
     MOCK_CONST_METHOD1_T(call, void(ozo::error_code));
     MOCK_CONST_METHOD0_T(get_executor, executor_type ());

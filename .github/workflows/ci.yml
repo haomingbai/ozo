@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  build-and-unit-test:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ccache \
+            cmake \
+            g++ \
+            libboost-all-dev \
+            libpq-dev \
+            ninja-build
+
+      - name: Configure OZO
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DOZO_BUILD_TESTS=ON
+          -DOZO_BUILD_EXAMPLES=ON
+
+      - name: Build OZO tests and examples
+        run: >
+          cmake --build build
+          --target
+          ozo_tests
+          ozo_request
+          ozo_transaction
+          ozo_retry_request
+          ozo_role_based_request
+          ozo_connection_pool
+
+      - name: Run OZO unit tests
+        run: ctest --test-dir build --output-on-failure -R ozo_tests
+
+      - name: Configure vendored resource_pool tests
+        run: >
+          cmake -S contrib/resource_pool -B build-resource-pool -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DRESOURCE_POOL_BUILD_TESTS=ON
+
+      - name: Build vendored resource_pool tests
+        run: cmake --build build-resource-pool --target resource_pool_test
+
+      - name: Run vendored resource_pool tests
+        run: ctest --test-dir build-resource-pool --output-on-failure -R resource_pool_test
+
+  postgres-integration-test:
+    runs-on: ubuntu-24.04
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ozo_test_db
+          POSTGRES_USER: ozo_test_user
+          POSTGRES_PASSWORD: v4Xpkocl~5l6h219Ynk1lJbM61jIr!ca
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ozo_test_user -d ozo_test_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 12
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            g++ \
+            libboost-all-dev \
+            libpq-dev \
+            ninja-build \
+            postgresql-client
+
+      - name: Wait for PostgreSQL
+        env:
+          PGPASSWORD: v4Xpkocl~5l6h219Ynk1lJbM61jIr!ca
+        run: |
+          for _ in $(seq 1 30); do
+            if pg_isready -h 127.0.0.1 -p 5432 -U ozo_test_user -d ozo_test_db; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Configure PostgreSQL integration tests
+        env:
+          OZO_PG_TEST_CONNINFO: host=127.0.0.1 port=5432 dbname=ozo_test_db user=ozo_test_user password=v4Xpkocl~5l6h219Ynk1lJbM61jIr!ca
+        run: >
+          cmake -S . -B build-pg -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DOZO_BUILD_TESTS=ON
+          -DOZO_BUILD_PG_TESTS=ON
+          -DOZO_PG_TEST_CONNINFO="$OZO_PG_TEST_CONNINFO"
+
+      - name: Build PostgreSQL integration tests
+        run: cmake --build build-pg --target ozo_tests
+
+      - name: Run PostgreSQL integration tests
+        run: ctest --test-dir build-pg --output-on-failure -R ozo_tests

@@ -292,8 +292,8 @@ struct is_connection<connection<Ts...>> : std::true_type {};
 * `%Connection` concept represents a minimum set of attributes and functions that are required
 * by the library to execute operations on a database. `%Connection` should provide:
 * * the native PostgreSQL connection handle from `libpq`,
-* * an executor to perform IO-related operation (according to the current version of Boost.Asio
-*   it should be `boost::asio::io_context::executor_type` object),
+* * an executor to perform IO-related operation (default OZO connection models use
+*   `boost::asio::io_context::executor_type`),
 * * an additional error context to provide context-depended information for errors,
 * * IO functions that are necessary to perform operations.
 *
@@ -314,7 +314,7 @@ struct is_connection<connection<Ts...>> : std::true_type {};
 * | <PRE>as_const(c).oid_map()</PRE> | `C::oid_map_type` | Should return a const reference on `OidMap` which is used by the library for custom types introspection for the connection IO. Shall not throw an exception. |
 * | <PRE>as_const(c).%get_error_context()</PRE> | `C::error_context_type` | Should return a const reference on an additional error context is related to at least the last error. In the current implementation, the type supported is `std::string`. Shall not throw an exception. |
 * | <PRE>c.set_error_context(error_context_type)<sup>[1]</sup><br/>%c.set_error_context()<sup>[2]</sup></PRE> | | Should set<sup>[1]</sup> or reset<sup>[2]</sup> additional error context. |
-* | <PRE>as_const(c).%get_executor()</PRE> | `C::executor_type` | Should provide an executor object that is useful for IO-related operations, like timer and so on. In the current implementation `boost::asio::io_context::executor_type` is only applicable. Shall not throw an exception. |
+* | <PRE>as_const(c).%get_executor()</PRE> | `C::executor_type` | Should provide an executor object that is useful for IO-related operations, like timer and so on. Default OZO connection models expose `boost::asio::io_context::executor_type`. Shall not throw an exception. |
 * | <PRE>c.async_wait_write(WaitHandler)</PRE> | | Should asynchronously wait for write ready state of the connection socket. |
 * | <PRE>c.async_wait_read(WaitHandler)</PRE> | | Should asynchronously wait for read ready state of the connection socket. |
 * | <PRE>c.close()</PRE> | `error_code` | Should close connection socket and cancel all IO operation on the connection (like `async_wait_write`, `async_wait_read`). Shall not throw an exception. |
@@ -591,7 +591,13 @@ struct forward_connection {
         static_assert(ozo::TimeConstraint<TimeConstraint>, "should model TimeConstraint concept");
         unwrap_connection(c).set_error_context();
         auto ex = unwrap_connection(c).get_executor();
-        asio::dispatch(ex, detail::bind(std::forward<Handler>(h), error_code{}, std::forward<Conn>(c)));
+        auto bound = detail::bind(std::forward<Handler>(h), error_code{}, std::forward<Conn>(c));
+        auto bound_ex = detail::resolve_asio_executor(asio::get_associated_executor(bound));
+        asio::dispatch(ex, [bound_ex, bound = std::move(bound)]() mutable {
+            asio::dispatch(bound_ex, [bound = std::move(bound)]() mutable {
+                bound();
+            });
+        });
     }
 };
 
