@@ -14,18 +14,20 @@ namespace ozo {
 class istream {
     class istreambuf {
         const char* i_;
-        const char* last_;
+        std::size_t remaining_;
     public:
 
         constexpr istreambuf(const char* data, size_t len) noexcept
-        : i_(data), last_(data + len) {}
+        : i_(data), remaining_(len) {}
 
         std::streamsize read(char* buf, std::streamsize n) noexcept {
-            auto last = std::min(i_ + n, last_);
-            std::copy(i_, last, buf);
-            n = std::distance(i_, last);
-            i_ = last;
-            return n;
+            const auto nbytes = n > 0 ? std::min<std::size_t>(remaining_, static_cast<std::size_t>(n)) : 0;
+            if (nbytes > 0) {
+                std::copy_n(i_, nbytes, buf);
+                i_ += nbytes;
+                remaining_ -= nbytes;
+            }
+            return static_cast<std::streamsize>(nbytes);
         }
     };
 public:
@@ -44,7 +46,7 @@ public:
     }
 
     traits_type::int_type get() noexcept {
-        char retval;
+        char retval = 0;
         if (!read(&retval, 1)) {
             return traits_type::eof();
         }
